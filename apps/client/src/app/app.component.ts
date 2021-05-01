@@ -1,26 +1,24 @@
 import { Component } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Message } from '@cloud-app/api-interfaces';
+import firebase from 'firebase/app';
+import 'firebase/database';
 
-export interface PeriodicElement {
-  name: string;
-  position: number;
-  weight: number;
-  symbol: string;
+const firebaseConfig = {
+  apiKey: 'AIzaSyBQRO6WfRUakxEYmRnatOHvymCPO4dkfJY',
+  authDomain: 'ragadozo-detektalo.firebaseapp.com',
+  databaseURL:
+    'https://ragadozo-detektalo-default-rtdb.europe-west1.firebasedatabase.app',
+  projectId: 'ragadozo-detektalo',
+  storageBucket: 'ragadozo-detektalo.appspot.com',
+  messagingSenderId: '448134490635',
+  appId: '1:448134490635:web:fb5abe49d51efed13d750e',
+  measurementId: 'G-0R3C86J0HN',
+};
+
+export interface AlertItem {
+  date: string;
+  time: string;
+  animals: string;
 }
-
-const ELEMENT_DATA: PeriodicElement[] = [
-  {position: 1, name: 'Hydrogen', weight: 1.0079, symbol: 'H'},
-  {position: 2, name: 'Helium', weight: 4.0026, symbol: 'He'},
-  {position: 3, name: 'Lithium', weight: 6.941, symbol: 'Li'},
-  {position: 4, name: 'Beryllium', weight: 9.0122, symbol: 'Be'},
-  {position: 5, name: 'Boron', weight: 10.811, symbol: 'B'},
-  {position: 6, name: 'Carbon', weight: 12.0107, symbol: 'C'},
-  {position: 7, name: 'Nitrogen', weight: 14.0067, symbol: 'N'},
-  {position: 8, name: 'Oxygen', weight: 15.9994, symbol: 'O'},
-  {position: 9, name: 'Fluorine', weight: 18.9984, symbol: 'F'},
-  {position: 10, name: 'Neon', weight: 20.1797, symbol: 'Ne'},
-];
 
 @Component({
   selector: 'cloud-app-root',
@@ -28,12 +26,52 @@ const ELEMENT_DATA: PeriodicElement[] = [
   styleUrls: ['./app.component.scss'],
 })
 export class AppComponent {
-  dataSource = ELEMENT_DATA;
-  displayedColumns: string[] = ['position', 'name', 'weight', 'symbol'];
+  private dbRef: firebase.database.Reference;
+  todaysString: string;
 
-  hello$ = this.http.get<Message>('/api/hello');
+  dataSource: AlertItem[];
+  displayedColumns: string[] = ['date', 'time', 'animals'];
 
-  constructor(private http: HttpClient) {
+  constructor() {
+    const now = new Date();
+    this.todaysString = [
+      now.getFullYear(),
+      now.getMonth() < 9 ? '0' + (now.getMonth() + 1) : now.getMonth() + 1,
+      now.getDate() < 10 ? '0' + now.getDate() : now.getDate(),
+    ].join('-');
+
+    firebase.initializeApp(firebaseConfig);
+    this.fetchPreviousItems();
   }
 
+  fetchPreviousItems() {
+    this.dbRef = firebase.database().ref(this.todaysString);
+    this.dbRef.once('value', (snapshot) => {
+      if (!snapshot.val()) {
+        return;
+      }
+
+      const rawValues = snapshot.val();
+      const timeList = Object.keys(rawValues);
+      this.dataSource = timeList.map((time) => ({
+        date: this.todaysString,
+        time: time.replace('-', ':').replace('-', ':'),
+        animals: rawValues[time].join(', '),
+      })).reverse();
+      this.fetchNewItems();
+    });
+  }
+
+  fetchNewItems() {
+    this.dbRef.limitToLast(1).on('child_added', (snapshot) => {
+      this.dataSource = [
+        {
+          date: this.todaysString,
+          time: snapshot.key.replace('-', ':').replace('-', ':'),
+          animals: snapshot.val().join(', '),
+        },
+        ...this.dataSource,
+      ];
+    });
+  }
 }
